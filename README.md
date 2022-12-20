@@ -1,2 +1,3 @@
-# rf_tlm
-A Telemetry Output App over RF
+# Core Flight System : Framework : App : RF Telemetry Output
+
+A cFS telemetry app for RTEMS Beaglebone Black that sends data packets over a I2C to a RF system, this is not portable.
