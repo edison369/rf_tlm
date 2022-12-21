@@ -78,8 +78,8 @@ typedef struct
 
 typedef struct
 {
-    uint8 CommandErrorCounter;
     uint8 CommandCounter;
+    uint8 CommandErrorCounter;
     uint8 spare[2];
     uint8 AppReportingID1[2];   /**< \brief App ID that reports with this app */
     uint8 AppReportingID2[2];   /**< \brief App ID that reports with this app */
