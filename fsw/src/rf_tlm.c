@@ -68,18 +68,15 @@ void RF_TLM_Main(void)
     */
     while (CFE_ES_RunLoop(&RF_TLM_Data.RunStatus) == true)
     {
-        /*
-        ** Performance Log Exit Stamp
-        */
+
         CFE_ES_PerfLogExit(RF_TLM_PERF_ID);
+
+        CFE_ES_PerfLogEntry(RF_TLM_PERF_ID);
+
+        RF_TLM_forward_telemetry();
 
         /* Pend on receipt of command packet */
         status = CFE_SB_ReceiveBuffer(&SBBufPtr, RF_TLM_Data.CommandPipe, CFE_SB_PEND_FOREVER);
-
-        /*
-        ** Performance Log Entry Stamp
-        */
-        CFE_ES_PerfLogEntry(RF_TLM_PERF_ID);
 
         if (status == CFE_SUCCESS)
         {
@@ -92,8 +89,6 @@ void RF_TLM_Main(void)
 
             RF_TLM_Data.RunStatus = CFE_ES_RunStatus_APP_ERROR;
         }
-
-        RF_TLM_forward_telemetry();
 
     }
 
@@ -115,6 +110,7 @@ int32 RF_TLM_Init(void)
     int32 status;
 
     RF_TLM_Data.downlink_on = false;
+    RF_TLM_Data.tlm_debug = false;
 
     RF_TLM_Data.RunStatus = CFE_ES_RunStatus_APP_RUN;
 
@@ -169,8 +165,7 @@ int32 RF_TLM_Init(void)
     ** Register the events
     */
     status = CFE_EVS_Register(RF_TLM_Data.EventFilters, RF_TLM_EVENT_COUNTS, CFE_EVS_EventFilter_BINARY);
-    if (status != CFE_SUCCESS)
-    {
+    if (status != CFE_SUCCESS){
         CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Registering Events, RC = 0x%08lX\n", (unsigned long)status);
         return status;
     }
@@ -178,18 +173,7 @@ int32 RF_TLM_Init(void)
     /*
     ** Initialize private data
     */
-    RF_TLM_Data.AppID_H = 0x00;
-    RF_TLM_Data.AppID_L = 0x00;
-    RF_TLM_Data.Ext_CmdCounter = 0;
-    RF_TLM_Data.Ext_ErrCounter = 0;
-    for(int i=0;i<4;i++){
-      RF_TLM_Data.byte_group_1[i] = 0;
-      RF_TLM_Data.byte_group_2[i] = 0;
-      RF_TLM_Data.byte_group_3[i] = 0;
-      RF_TLM_Data.byte_group_4[i] = 0;
-      RF_TLM_Data.byte_group_5[i] = 0;
-      RF_TLM_Data.byte_group_6[i] = 0;
-    }
+    RF_TLM_Data_Init();
 
     /*
     ** Initialize housekeeping packet (clear user data area).
@@ -198,37 +182,31 @@ int32 RF_TLM_Init(void)
                  sizeof(RF_TLM_Data.HkTlm));
 
     /*
-    ** Create Software Bus message pipe.
+    ** Software Bus message pipe.
     */
     status = CFE_SB_CreatePipe(&RF_TLM_Data.CommandPipe, RF_TLM_Data.PipeDepth, RF_TLM_Data.PipeName);
-    if (status != CFE_SUCCESS)
-    {
-       CFE_ES_WriteToSysLog("RF Telemetry Output App: Error creating pipe, RC = 0x%08lX\n", (unsigned long)status);
-       return status;
+    if (status == CFE_SUCCESS){
+        /* Subscribe to Housekeeping request commands */
+        status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(RF_TLM_SEND_HK_MID), RF_TLM_Data.CommandPipe);
+        if (status != CFE_SUCCESS){
+           CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Subscribing to HK request, RC = 0x%08lX\n", (unsigned long)status);
+           return status;
+        }
+
+        /* Subscribe to ground command packets */
+        status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(RF_TLM_CMD_MID), RF_TLM_Data.CommandPipe);
+        if (status != CFE_SUCCESS){
+           CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Subscribing to Command, RC = 0x%08lX\n", (unsigned long)status);
+           return status;
+        }
+    }else{
+        CFE_ES_WriteToSysLog("RF Telemetry Output App: Error creating pipe, RC = 0x%08lX\n", (unsigned long)status);
+        return status;
     }
 
     /*
-    ** Subscribe to Housekeeping request commands
+    ** Software Bus telemetry pipe.
     */
-    status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(RF_TLM_SEND_HK_MID), RF_TLM_Data.CommandPipe);
-    if (status != CFE_SUCCESS)
-    {
-       CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Subscribing to HK request, RC = 0x%08lX\n", (unsigned long)status);
-       return status;
-    }
-
-    /*
-    ** Subscribe to ground command packets
-    */
-    status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(RF_TLM_CMD_MID), RF_TLM_Data.CommandPipe);
-    if (status != CFE_SUCCESS)
-    {
-       CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Subscribing to Command, RC = 0x%08lX\n", (unsigned long)status);
-
-       return status;
-    }
-
-    /* Create RF TLM pipe */
     char   RFTlmPipeName[16];
     uint16 RFTlmPipeDepth;
 
@@ -236,23 +214,23 @@ int32 RF_TLM_Init(void)
     strcpy(RFTlmPipeName, "RF_TLM_TO_PIPE");
 
     status = CFE_SB_CreatePipe(&RF_TLM_Data.TlmPipe, RFTlmPipeDepth, RFTlmPipeName);
-    if (status != CFE_SUCCESS)
-    {
+    if (status != CFE_SUCCESS){
         CFE_EVS_SendEvent(RF_TLM_PIPE_ERR_EID, CFE_EVS_EventType_ERROR, "RF Can't create Tlm pipe status %i\n",(int)status);
+        return status;
     }
 
     /*
     ** Subscribe to Altitude App RF packets
     */
-    // status = CFE_SB_SubscribeEX(CFE_SB_ValueToMsgId(ALTITUDE_APP_RF_DATA_MID), RF_TLM_Data.TlmPipe);
-    status = CFE_SB_SubscribeEX(CFE_SB_ValueToMsgId(ALTITUDE_APP_RF_DATA_MID),  /* Msg Id to Receive */
+    // status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(ALTITUDE_APP_RF_DATA_MID), RF_TLM_Data.TlmPipe);
+    status = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(ALTITUDE_APP_RF_DATA_MID),  /* Msg Id to Receive */
                                 RF_TLM_Data.TlmPipe,                            /* Pipe Msg is to be Rcvd on */
                                 CFE_SB_DEFAULT_QOS,                             /* Quality of Service */
                                 10);                                            /* Max Number to Queue */
-    if (status != CFE_SUCCESS)
-    {
-       CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Subscribing to Altitude App, RC = 0x%08lX\n", (unsigned long)status);
-
+    if (status != CFE_SUCCESS){
+       CFE_EVS_SendEvent(RF_TLM_SUBSCRIBE_ERR_EID, CFE_EVS_EventType_ERROR,
+         "RF Telemetry Output App: Error Subscribing to Altitude App, RC = 0x%08lX\n",
+         (unsigned long)status);
        return status;
     }
 
@@ -260,14 +238,14 @@ int32 RF_TLM_Init(void)
     ** Subscribe to Blinky App RF packets
     */
     // status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(BLINKY_RF_DATA_MID), RF_TLM_Data.TlmPipe);
-    status = CFE_SB_SubscribeEX(CFE_SB_ValueToMsgId(BLINKY_RF_DATA_MID),  /* Msg Id to Receive */
+    status = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(BLINKY_RF_DATA_MID),  /* Msg Id to Receive */
                                 RF_TLM_Data.TlmPipe,                            /* Pipe Msg is to be Rcvd on */
                                 CFE_SB_DEFAULT_QOS,                             /* Quality of Service */
                                 10);                                            /* Max Number to Queue */
-    if (status != CFE_SUCCESS)
-    {
-       CFE_ES_WriteToSysLog("RF Telemetry Output App: Error Subscribing to Blinky App, RC = 0x%08lX\n", (unsigned long)status);
-
+    if (status != CFE_SUCCESS){
+       CFE_EVS_SendEvent(RF_TLM_SUBSCRIBE_ERR_EID, CFE_EVS_EventType_ERROR,
+         "RF Telemetry Output App: Error Subscribing to Blinky App, RC = 0x%08lX\n",
+         (unsigned long)status);
        return status;
     }
 
@@ -275,6 +253,41 @@ int32 RF_TLM_Init(void)
                      RF_TLM_VERSION_STRING);
 
 
+    return CFE_SUCCESS;
+}
+
+/*
+** Initialize private data
+*/
+void RF_TLM_Data_Init(void){
+  RF_TLM_Data.AppID_H = 0x00;
+  RF_TLM_Data.AppID_L = 0x00;
+  RF_TLM_Data.Ext_CmdCounter = 0;
+  RF_TLM_Data.Ext_ErrCounter = 0;
+  for(int i=0;i<4;i++){
+    RF_TLM_Data.byte_group_1[i] = 0;
+    RF_TLM_Data.byte_group_2[i] = 0;
+    RF_TLM_Data.byte_group_3[i] = 0;
+    RF_TLM_Data.byte_group_4[i] = 0;
+    RF_TLM_Data.byte_group_5[i] = 0;
+    RF_TLM_Data.byte_group_6[i] = 0;
+  }
+}
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/*                                                                 */
+/* RF_TLM_EnableOutput() -- TLM output enabled                     */
+/*                                                                 */
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+int32 RF_TLM_EnableOutput(const RF_TLM_EnableOutputCmd_t *data){
+    RF_TLM_Data.suppress_sendto = false;
+    CFE_EVS_SendEvent(RF_TLM_TLMOUTENA_INF_EID, CFE_EVS_EventType_INFORMATION, "RF telemetry output enabled\n");
+
+    if (!RF_TLM_Data.downlink_on){
+        RF_TLM_Data.downlink_on = true;
+    }
+
+    ++RF_TLM_Data.HkTlm.Payload.CommandCounter;
     return CFE_SUCCESS;
 }
 
@@ -347,6 +360,22 @@ void RF_TLM_ProcessGroundCommand(CFE_SB_Buffer_t *SBBufPtr){
 
             break;
 
+        case RF_TLM_DEBUG_ENABLE_CC:
+            if (RF_TLM_VerifyCmdLength(&SBBufPtr->Msg, sizeof(RF_TLM_EnableDebugCmd_t)))
+            {
+                RF_TLM_Enable_Debug((const RF_TLM_EnableDebugCmd_t *)SBBufPtr);
+            }
+
+            break;
+
+        case RF_TLM_DEBUG_DISABLE_CC:
+            if (RF_TLM_VerifyCmdLength(&SBBufPtr->Msg, sizeof(RF_TLM_DisableDebugCmd_t)))
+            {
+                RF_TLM_Disable_Debug((const RF_TLM_DisableDebugCmd_t *)SBBufPtr);
+            }
+
+            break;
+
         /* default case already found during FC vs length test */
         default:
             CFE_EVS_SendEvent(RF_TLM_COMMAND_ERR_EID, CFE_EVS_EventType_ERROR,
@@ -375,19 +404,31 @@ int32 RF_TLM_ReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg)
     if(RF_TLM_Data.AppReporting1){
       RF_TLM_Data.HkTlm.Payload.AppReportingID1[1] = 0x08;
       RF_TLM_Data.HkTlm.Payload.AppReportingID1[0] = 0xE0;
+    }else{
+      RF_TLM_Data.HkTlm.Payload.AppReportingID1[1] = 0x00;
+      RF_TLM_Data.HkTlm.Payload.AppReportingID1[0] = 0x00;
     }
 
     if(RF_TLM_Data.AppReporting2){
       RF_TLM_Data.HkTlm.Payload.AppReportingID2[1] = 0x08;
       RF_TLM_Data.HkTlm.Payload.AppReportingID2[0] = 0xB3;
+    }else{
+      RF_TLM_Data.HkTlm.Payload.AppReportingID2[1] = 0x00;
+      RF_TLM_Data.HkTlm.Payload.AppReportingID2[0] = 0x00;
     }
 
     if(RF_TLM_Data.AppReporting3){
       RF_TLM_Data.HkTlm.Payload.AppReportingID3[1] = 0x00;
       RF_TLM_Data.HkTlm.Payload.AppReportingID3[0] = 0x00;
+    }else{
+      RF_TLM_Data.HkTlm.Payload.AppReportingID3[1] = 0x00;
+      RF_TLM_Data.HkTlm.Payload.AppReportingID3[0] = 0x00;
     }
 
     if(RF_TLM_Data.AppReporting4){
+      RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x00;
+      RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0x00;
+    }else{
       RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x00;
       RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0x00;
     }
@@ -397,6 +438,36 @@ int32 RF_TLM_ReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg)
     */
     CFE_SB_TimeStampMsg(CFE_MSG_PTR(RF_TLM_Data.HkTlm.TelemetryHeader));
     CFE_SB_TransmitMsg(CFE_MSG_PTR(RF_TLM_Data.HkTlm.TelemetryHeader), true);
+
+    return CFE_SUCCESS;
+}
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+/*                                                                            */
+/* RF TLM Enable Debug command                                                       */
+/*                                                                            */
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+int32 RF_TLM_Enable_Debug(const RF_TLM_EnableDebugCmd_t *Msg)
+{
+    RF_TLM_Data.CmdCounter++;
+    RF_TLM_Data.tlm_debug = true;
+
+    CFE_EVS_SendEvent(RF_TLM_COMMANDDEBUG_INF_EID, CFE_EVS_EventType_INFORMATION, "RF TLM: Debug enabled");
+
+    return CFE_SUCCESS;
+}
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+/*                                                                            */
+/* RF TLM Disable Debug command                                                       */
+/*                                                                            */
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+int32 RF_TLM_Disable_Debug(const RF_TLM_DisableDebugCmd_t *Msg)
+{
+    RF_TLM_Data.CmdCounter++;
+    RF_TLM_Data.tlm_debug = false;
+
+    CFE_EVS_SendEvent(RF_TLM_COMMANDDEBUG_INF_EID, CFE_EVS_EventType_INFORMATION, "RF TLM: Debug disabled");
 
     return CFE_SUCCESS;
 }
@@ -473,31 +544,13 @@ bool RF_TLM_VerifyCmdLength(CFE_MSG_Message_t *MsgPtr, size_t ExpectedLength)
 /* RF_TLM_openTLM() -- Open TLM                                    */
 /*                                                                 */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-void RF_TLM_openTLM(void)
-{
+void RF_TLM_openTLM(void){
     int32 status;
 
     status = genuC_driver_open();
     if (status != CFE_SUCCESS){
       CFE_EVS_SendEvent(RF_TLM_GENUC_ERR_EID, CFE_EVS_EventType_ERROR, "RF TLM: Error opening the genuC driver");
     }
-}
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/*                                                                 */
-/* RF_TLM_EnableOutput() -- TLM output enabled                     */
-/*                                                                 */
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-int32 RF_TLM_EnableOutput(const RF_TLM_EnableOutputCmd_t *data){
-    RF_TLM_Data.suppress_sendto = false;
-    CFE_EVS_SendEvent(RF_TLM_TLMOUTENA_INF_EID, CFE_EVS_EventType_INFORMATION, "RF telemetry output enabled\n");
-
-    if (!RF_TLM_Data.downlink_on){
-        RF_TLM_Data.downlink_on = true;
-    }
-
-    ++RF_TLM_Data.HkTlm.Payload.CommandCounter;
-    return CFE_SUCCESS;
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -512,61 +565,55 @@ void RF_TLM_forward_telemetry(void){
     CFE_SB_MsgId_t   TlmMsgId;
 
 
-    ALTITUDE_APP_OutData_t* dataPtr_1 = NULL;
-    BLINKY_OutData_t* dataPtr_2 = NULL;
+    SUBS_APP_OutData_t* dataPtr = NULL;
 
-    while(1){
-        // Probar con CFE_SB_PEND_FOREVER en vez de CFE_SB_POLL
+    do{
         CFE_SB_status = CFE_SB_ReceiveBuffer(&TlmMsgPtr, RF_TLM_Data.TlmPipe, CFE_SB_POLL);
+        dataPtr = NULL;
 
         if (CFE_SB_status == CFE_SUCCESS){
             if((RF_TLM_Data.suppress_sendto == false) && (RF_TLM_Data.downlink_on == true)){
               CFE_MSG_GetMsgId(&TlmMsgPtr->Msg, &TlmMsgId);
 
-              switch (CFE_SB_MsgIdToValue(TlmMsgId)){
+              /* Update the private data */
+              dataPtr = (SUBS_APP_OutData_t *)TlmMsgPtr;
+              RF_TLM_Data.AppID_H = dataPtr->AppID_H;
+              RF_TLM_Data.AppID_L = dataPtr->AppID_L;
+              RF_TLM_Data.Ext_CmdCounter = dataPtr->CommandCounter;
+              RF_TLM_Data.Ext_ErrCounter = dataPtr->CommandErrorCounter;
+              for(int i=0;i<4;i++){
+                RF_TLM_Data.byte_group_1[i] = dataPtr->byte_group_1[i];
+                RF_TLM_Data.byte_group_2[i] = dataPtr->byte_group_2[i];
+                RF_TLM_Data.byte_group_3[i] = dataPtr->byte_group_3[i];
+                RF_TLM_Data.byte_group_4[i] = dataPtr->byte_group_4[i];
+                RF_TLM_Data.byte_group_5[i] = dataPtr->byte_group_5[i];
+                RF_TLM_Data.byte_group_6[i] = dataPtr->byte_group_6[i];
+              }
 
-                case ALTITUDE_APP_RF_DATA_MID:
-                  RF_TLM_Data.AppReporting1 = true;
-                  /* Update the private data */
-                  dataPtr_1 = (ALTITUDE_APP_OutData_t *)TlmMsgPtr;
-                  RF_TLM_Data.AppID_H = dataPtr_1->AppID_H;
-                  RF_TLM_Data.AppID_L = dataPtr_1->AppID_L;
-                  RF_TLM_Data.Ext_CmdCounter = dataPtr_1->CommandCounter;
-                  RF_TLM_Data.Ext_ErrCounter = dataPtr_1->CommandErrorCounter;
-                  for(int i=0;i<4;i++){
-                    RF_TLM_Data.byte_group_1[i] = dataPtr_1->accel_x[i];
-                    RF_TLM_Data.byte_group_2[i] = dataPtr_1->accel_y[i];
-                    RF_TLM_Data.byte_group_3[i] = dataPtr_1->accel_z[i];
-                    RF_TLM_Data.byte_group_4[i] = dataPtr_1->gyro_x[i];
-                    RF_TLM_Data.byte_group_5[i] = dataPtr_1->gyro_y[i];
-                    RF_TLM_Data.byte_group_6[i] = dataPtr_1->gyro_z[i];
-                  }
-                  status = send_tlm_data();
-                  break;
+              CFE_ES_PerfLogEntry(RF_TLM_I2C_SEND_PERF_ID);
 
-                case BLINKY_RF_DATA_MID:
-                  RF_TLM_Data.AppReporting2 = true;
-                  /* Update the private data */
-                  dataPtr_2 = (BLINKY_OutData_t *)TlmMsgPtr;
-                  RF_TLM_Data.AppID_H = dataPtr_2->AppID_H;
-                  RF_TLM_Data.AppID_L = dataPtr_2->AppID_L;
-                  RF_TLM_Data.Ext_CmdCounter = dataPtr_2->CommandCounter;
-                  RF_TLM_Data.Ext_ErrCounter = dataPtr_2->CommandErrorCounter;
-                  for(int i=0;i<4;i++){
-                    RF_TLM_Data.byte_group_1[i] = dataPtr_2->led_1_4[i];
-                    RF_TLM_Data.byte_group_2[i] = dataPtr_2->led_5_8[i];
-                    RF_TLM_Data.byte_group_3[i] = 0;
-                    RF_TLM_Data.byte_group_4[i] = 0;
-                    RF_TLM_Data.byte_group_5[i] = 0;
-                    RF_TLM_Data.byte_group_6[i] = 0;
-                  }
-                  status = send_tlm_data();
-                  break;
+              status = send_tlm_data();
 
-                default:
-                      CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
-                                        "RF TLM - Recvd invalid TLM msgId (0x%08X)", CFE_SB_MsgIdToValue(TlmMsgId));
-                      break;
+              CFE_ES_PerfLogExit(RF_TLM_I2C_SEND_PERF_ID);
+
+              if(RF_TLM_Data.tlm_debug){
+                switch (CFE_SB_MsgIdToValue(TlmMsgId)){
+
+                  case ALTITUDE_APP_RF_DATA_MID:
+                    CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_INFORMATION,
+                                      "RF TLM - Enviando Altitud app con status %d",status);
+                    break;
+
+                  case BLINKY_RF_DATA_MID:
+                    CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_INFORMATION,
+                                      "RF TLM - Enviando Blinky app con status %d",status);
+                    break;
+
+                  default:
+                    CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_ERROR,
+                                      "RF TLM - Recvd invalid TLM msgId (0x%08X)", CFE_SB_MsgIdToValue(TlmMsgId));
+                    break;
+                }
               }
             }else{
                 status = 0;
@@ -578,158 +625,87 @@ void RF_TLM_forward_telemetry(void){
                 RF_TLM_Data.suppress_sendto = true;
             }
         }else if(CFE_SB_status == CFE_SB_NO_MESSAGE){
-          CFE_EVS_SendEvent(RF_TLM_COMMANDNOP_INF_EID, CFE_EVS_EventType_INFORMATION,
-                            "RF TLM: No packet received\n");
+          // The pipe is empty
           break;
         }else if(CFE_SB_status == CFE_SB_TIME_OUT){
           CFE_EVS_SendEvent(RF_TLM_COMMANDNOP_INF_EID, CFE_EVS_EventType_INFORMATION,
                             "RF TLM: Message fails to arrive within the specified timeout period\n");
           break;
         }
-    }
+        // RF_TLM_Data_Init();
+        OS_TaskDelay(RF_TLM_TASK_MSEC); /*2 Hz*/
+    }while(CFE_SB_status == CFE_SUCCESS);
 }
 
-#ifdef GENUC
-  static int uC_ioctl(i2c_dev *dev, ioctl_command_t command, void *arg);
+static int uC_ioctl(i2c_dev *dev, ioctl_command_t command, void *arg);
 
-  int32 send_tlm_data(){
-    int rv;
+int32 send_tlm_data(){
+  int rv;
 
-    uint8_t *val;
-    val = NULL;
-    val = malloc(RF_PAYLOAD_BYTES * sizeof(uint8_t));
+  uint8_t *val;
+  val = NULL;
+  val = malloc(RF_PAYLOAD_BYTES * sizeof(uint8_t));
 
-    val[0] = RF_TLM_Data.AppID_H;
-    val[1] = RF_TLM_Data.AppID_L;
-    val[2] = RF_TLM_Data.Ext_ErrCounter;
-    val[3] = RF_TLM_Data.Ext_CmdCounter;
-    val[4] = 0;
-    val[5] = 0;
-
-    for(int i=0;i<4;i++){
-      val[i+6] = RF_TLM_Data.byte_group_1[i];
-      val[i+10] = RF_TLM_Data.byte_group_2[i];
-      val[i+14] = RF_TLM_Data.byte_group_3[i];
-      val[i+18] = RF_TLM_Data.byte_group_4[i];
-      val[i+22] = RF_TLM_Data.byte_group_5[i];
-      val[i+26] = RF_TLM_Data.byte_group_6[i];
-    }
-
-
-    // Send the telemetry payload
-    rv = uC_set_bytes(UC_ADDRESS, &val, RF_PAYLOAD_BYTES);
-    if(rv >= 0){
-      return CFE_SUCCESS;
-    }else{
-      return -1;
-    }
+  if(RF_TLM_Data.tlm_debug){
+    CFE_EVS_SendEvent(RF_TLM_TLMOUTSTOP_ERR_EID, CFE_EVS_EventType_ERROR,
+                      "RF TLM: Sending packet from [AppID]: 0x%x%x",RF_TLM_Data.AppID_H, RF_TLM_Data.AppID_L);
   }
 
-  int32 genuC_driver_open(){
+  val[0] = RF_TLM_Data.AppID_H;
+  val[1] = RF_TLM_Data.AppID_L;
+  val[2] = RF_TLM_Data.Ext_ErrCounter;
+  val[3] = RF_TLM_Data.Ext_CmdCounter;
+  val[4] = 0;
+  val[5] = 0;
 
-  int rv;
-  int fd;
+  for(int i=0;i<4;i++){
+    val[i+6] = RF_TLM_Data.byte_group_1[i];
+    val[i+10] = RF_TLM_Data.byte_group_2[i];
+    val[i+14] = RF_TLM_Data.byte_group_3[i];
+    val[i+18] = RF_TLM_Data.byte_group_4[i];
+    val[i+22] = RF_TLM_Data.byte_group_5[i];
+    val[i+26] = RF_TLM_Data.byte_group_6[i];
+  }
 
-  // Device registration
-  rv = i2c_dev_register_uC(
-    &bus_path[0],
-    &genuC_path[0]
-  );
-  if(rv == 0)
-    CFE_EVS_SendEvent(RF_TLM_DEV_INF_EID, CFE_EVS_EventType_INFORMATION, "RF: Device registered correctly at %s",
-                      genuC_path);
 
-  fd = open(&genuC_path[0], O_RDWR);
-  if(fd >= 0)
-    CFE_EVS_SendEvent(RF_TLM_DEV_INF_EID, CFE_EVS_EventType_INFORMATION, "RF: Device opened correctly at %s",
-                      genuC_path);
-  close(fd);
-
-  if(rv == 0 && fd >=0){
-    return CFE_SUCCESS;
+  // Send the telemetry payload
+  rv = uC_set_bytes(UC_ADDRESS, &val, RF_PAYLOAD_BYTES);
+  if(rv == 1 || rv < 0){
+    return -1;    // Couldn't open bus or ioctl failed
   }else{
-    return -1;
+    return 0;     // Succeded
   }
+}
+
+int32 genuC_driver_open(){
+
+int rv;
+int fd;
+
+// Device registration
+rv = i2c_dev_register_uC(
+  &bus_path[0],
+  &genuC_path[0]
+);
+if(rv == 0)
+  CFE_EVS_SendEvent(RF_TLM_DEV_INF_EID, CFE_EVS_EventType_INFORMATION, "RF: Device registered correctly at %s",
+                    genuC_path);
+
+fd = open(&genuC_path[0], O_RDWR);
+if(fd >= 0)
+  CFE_EVS_SendEvent(RF_TLM_DEV_INF_EID, CFE_EVS_EventType_INFORMATION, "RF: Device opened correctly at %s",
+                    genuC_path);
+close(fd);
+
+if(rv == 0 && fd >=0){
+  return CFE_SUCCESS;
+}else{
+  return -1;
+}
 
 }
 
-  #ifdef uC_reading
-
-  static int read_bytes(int fd, uint16_t i2c_address, uint8_t data_address, uint16_t nr_bytes, uint8_t **buff);
-
-  static int read_bytes(int fd, uint16_t i2c_address, uint8_t data_address, uint16_t nr_bytes, uint8_t **buff){
-  int rv;
-  uint8_t value[nr_bytes];
-  i2c_msg msgs[] = {{
-    .addr = i2c_address,
-    .flags = 0,
-    .buf = &data_address,
-    .len = 1,
-  }, {
-    .addr = i2c_address,
-    .flags = I2C_M_RD,
-    .buf = value,
-    .len = nr_bytes,
-  }};
-  struct i2c_rdwr_ioctl_data payload = {
-    .msgs = msgs,
-    .nmsgs = sizeof(msgs)/sizeof(msgs[0]),
-  };
-  uint16_t i;
-
-  rv = ioctl(fd, I2C_RDWR, &payload);
-  if (rv < 0) {
-    printf("ioctl failed...\n");
-  } else {
-
-    free(*buff);
-    *buff = malloc(nr_bytes * sizeof(uint8_t));
-
-    for (i = 0; i < nr_bytes; ++i) {
-      (*buff)[i] = value[i];
-    }
-  }
-
-  return rv;
-  }
-
-  int uC_get_bytes(uint16_t chip_address, uint8_t register_add, uint8_t **buff){
-
-  int fd;
-  int rv;
-
-  uint8_t *tmp;
-  tmp = NULL;
-
-  free(*buff);
-  *buff = malloc(1 * sizeof(uint8_t));
-
-  uint16_t nr_bytes = (uint16_t) 1;
-  uint8_t data_address = (uint8_t) register_add;
-
-  fd = open(&bus_path[0], O_RDWR);
-  if (fd < 0) {
-    printf("Couldn't open bus...\n");
-    return 1;
-  }
-
-  if(chip_address == 0){
-    chip_address = (uint16_t) UC_ADDRESS;
-  }
-
-  rv = read_bytes(fd, chip_address, data_address, nr_bytes, &tmp);
-
-  close(fd);
-
-  (*buff)[0] = *tmp;
-  free(tmp);
-
-  return rv;
-  }
-
-  #endif
-
-  int uC_set_bytes(uint16_t chip_address, uint8_t **val, int numBytes){
+int uC_set_bytes(uint16_t chip_address, uint8_t **val, int numBytes){
 
   int fd;
   int rv;
@@ -768,9 +744,9 @@ void RF_TLM_forward_telemetry(void){
   close(fd);
 
   return rv;
-  }
+}
 
-  int i2c_dev_register_uC(const char *bus_path, const char *dev_path){
+int i2c_dev_register_uC(const char *bus_path, const char *dev_path){
   i2c_dev *dev;
 
   dev = i2c_dev_alloc_and_init(sizeof(*dev), bus_path, UC_ADDRESS);
@@ -781,9 +757,9 @@ void RF_TLM_forward_telemetry(void){
   dev->ioctl = uC_ioctl;
 
   return i2c_dev_register(dev, dev_path);
-  }
+}
 
-  static int uC_ioctl(i2c_dev *dev, ioctl_command_t command, void *arg){
+static int uC_ioctl(i2c_dev *dev, ioctl_command_t command, void *arg){
   int err;
 
   // Variables for the Send test
@@ -809,9 +785,8 @@ void RF_TLM_forward_telemetry(void){
   }
 
   return err;
-  }
+}
 
-  int uC_send_test(int fd){
-    return ioctl(fd, UC_SEND_TEST, NULL);
-  }
-#endif
+int uC_send_test(int fd){
+  return ioctl(fd, UC_SEND_TEST, NULL);
+}

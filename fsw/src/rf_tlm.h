@@ -52,11 +52,11 @@
 ** Include and constants for I2C
 */
 #include "gen-uC.h"
-#define GENUC
 
 static const char bus_path[] = "/dev/i2c-2";
 static const char genuC_path[] = "/dev/i2c-2.genuC-0";
 /***********************************************************************/
+#define RF_TLM_TASK_MSEC 500 /* run at 2 Hz */
 
 #define RF_TLM_UNUSED    CFE_SB_MSGID_RESERVED
 
@@ -72,6 +72,9 @@ static const char genuC_path[] = "/dev/i2c-2.genuC-0";
 ** Type Definitions
 *************************************************************************/
 
+
+#define RF_PAYLOAD_BYTES 30
+
 /*
 ** Global Data
 */
@@ -80,6 +83,7 @@ typedef struct
 
     bool downlink_on;
     bool suppress_sendto;
+    bool tlm_debug;
     /*
     ** Command interface counters...
     */
@@ -118,8 +122,7 @@ typedef struct
     ** Operational data (not reported in housekeeping)...
     */
     CFE_SB_PipeId_t CommandPipe;
-    CFE_SB_PipeId_t TlmPipe_1;
-    CFE_SB_PipeId_t TlmPipe_2;
+    CFE_SB_PipeId_t TlmPipe;
 
     /*
     ** Initialization data (not reported in housekeeping)...
@@ -146,7 +149,10 @@ int32 RF_TLM_ReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg);
 int32 RF_TLM_ResetCounters(const RF_TLM_ResetCountersCmd_t *Msg);
 int32 RF_TLM_Noop(const RF_TLM_NoopCmd_t *Msg);
 int32 RF_TLM_EnableOutput(const RF_TLM_EnableOutputCmd_t *data);
+int32 RF_TLM_Enable_Debug(const RF_TLM_EnableDebugCmd_t *Msg);
+int32 RF_TLM_Disable_Debug(const RF_TLM_DisableDebugCmd_t *Msg);
 
+void  RF_TLM_Data_Init(void);
 void  RF_TLM_openTLM(void);
 void  RF_TLM_forward_telemetry(void);
 int32 genuC_driver_open(void);

@@ -26,5 +26,6 @@
 #define RF_TLM_PERFIDS_H
 
 #define RF_TLM_PERF_ID 91
+#define RF_TLM_I2C_SEND_PERF_ID 92
 
 #endif /* RF_TLM_PERFIDS_H */

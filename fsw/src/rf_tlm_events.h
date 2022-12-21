@@ -38,6 +38,7 @@
 #define RF_TLM_GENUC_ERR_EID         10
 #define RF_TLM_TLMOUTENA_INF_EID     11
 #define RF_TLM_DEV_INF_EID           12
+#define RF_TLM_COMMANDDEBUG_INF_EID  13
 
 #define RF_TLM_EVENT_COUNTS          12
 
