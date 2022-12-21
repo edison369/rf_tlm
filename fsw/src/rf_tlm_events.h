@@ -33,5 +33,12 @@
 #define RF_TLM_INVALID_MSGID_ERR_EID 5
 #define RF_TLM_LEN_ERR_EID           6
 #define RF_TLM_PIPE_ERR_EID          7
+#define RF_TLM_SUBSCRIBE_ERR_EID     8
+#define RF_TLM_TLMOUTSTOP_ERR_EID    9
+#define RF_TLM_GENUC_ERR_EID         10
+#define RF_TLM_TLMOUTENA_INF_EID     11
+#define RF_TLM_DEV_INF_EID           12
+
+#define RF_TLM_EVENT_COUNTS          12
 
 #endif /* RF_TLM_EVENTS_H */

@@ -30,9 +30,11 @@
 */
 #define RF_TLM_NOOP_CC           0
 #define RF_TLM_RESET_COUNTERS_CC 1
-#define RF_TLM_PROCESS_CC        2
+#define RF_TLM_OUTPUT_ENABLE_CC  2
 
 /*************************************************************************/
+
+#define RF_PAYLOAD_BYTES 30
 
 /*
 ** Type definition (generic "no arguments" command)
@@ -51,7 +53,7 @@ typedef struct
 */
 typedef RF_TLM_NoArgsCmd_t RF_TLM_NoopCmd_t;
 typedef RF_TLM_NoArgsCmd_t RF_TLM_ResetCountersCmd_t;
-typedef RF_TLM_NoArgsCmd_t RF_TLM_ProcessCmd_t;
+typedef RF_TLM_NoArgsCmd_t RF_TLM_EnableOutputCmd_t;
 
 /*************************************************************************/
 /*
@@ -63,12 +65,16 @@ typedef struct
     uint8 CommandErrorCounter;
     uint8 CommandCounter;
     uint8 spare[2];
-} RF_TLM_HkTlm_Payload_t;
+    uint8 AppReportingID1[2];   /**< \brief App ID that reports with this app */
+    uint8 AppReportingID2[2];   /**< \brief App ID that reports with this app */
+    uint8 AppReportingID3[2];   /**< \brief App ID that reports with this app */
+    uint8 AppReportingID4[2];   /**< \brief App ID that reports with this app */
+} RF_TLM_UDP_HkTlm_Payload_t;   // Telemetry sent over UDP (to_lab)
 
 typedef struct
 {
     CFE_MSG_TelemetryHeader_t  TelemetryHeader; /**< \brief Telemetry header */
-    RF_TLM_HkTlm_Payload_t Payload;         /**< \brief Telemetry payload */
+    RF_TLM_UDP_HkTlm_Payload_t Payload;         /**< \brief Telemetry payload */
 } RF_TLM_HkTlm_t;
 
 #endif /* RF_TLM_MSG_H */

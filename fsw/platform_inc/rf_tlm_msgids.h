@@ -28,9 +28,9 @@
 #define RF_TLM_MSGIDS_H
 
 /* V1 Command Message IDs must be 0x18xx */
-#define RF_TLM_CMD_MID     0x1882
-#define RF_TLM_SEND_HK_MID 0x1883
+#define RF_TLM_CMD_MID     0x18D7
+#define RF_TLM_SEND_HK_MID 0x18D8
 /* V1 Telemetry Message IDs must be 0x08xx */
-#define RF_TLM_HK_TLM_MID 0x0883
+#define RF_TLM_HK_TLM_MID 0x08D9
 
 #endif /* RF_TLM_MSGIDS_H */
