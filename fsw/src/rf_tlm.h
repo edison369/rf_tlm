@@ -41,8 +41,8 @@
 /*
 ** Includes of the apps that send telemetry
 */
-#include "altitude_app_msgids.h"
-#include "altitude_app_msg.h"
+#include "imu_app_msgids.h"
+#include "imu_app_msg.h"
 
 #include "blinky_msgids.h"
 #include "blinky_msg.h"
@@ -73,7 +73,7 @@ static const char genuC_path[] = "/dev/i2c-2.genuC-0";
 *************************************************************************/
 
 
-#define RF_PAYLOAD_BYTES 30
+#define RF_PAYLOAD_BYTES 42
 
 /*
 ** Global Data
@@ -106,6 +106,9 @@ typedef struct
     uint8 byte_group_4[4];
     uint8 byte_group_5[4];
     uint8 byte_group_6[4];
+    uint8 byte_group_7[4];
+    uint8 byte_group_8[4];
+    uint8 byte_group_9[4];
 
     bool AppReporting1;
     bool AppReporting2;
