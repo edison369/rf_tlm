@@ -220,16 +220,16 @@ int32 RF_TLM_Init(void)
     }
 
     /*
-    ** Subscribe to Altitude App RF packets
+    ** Subscribe to IMU App RF packets
     */
-    // status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(ALTITUDE_APP_RF_DATA_MID), RF_TLM_Data.TlmPipe);
-    status = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(ALTITUDE_APP_RF_DATA_MID),  /* Msg Id to Receive */
+    // status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(IMU_APP_RF_DATA_MID), RF_TLM_Data.TlmPipe);
+    status = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(IMU_APP_RF_DATA_MID),  /* Msg Id to Receive */
                                 RF_TLM_Data.TlmPipe,                            /* Pipe Msg is to be Rcvd on */
                                 CFE_SB_DEFAULT_QOS,                             /* Quality of Service */
                                 10);                                            /* Max Number to Queue */
     if (status != CFE_SUCCESS){
        CFE_EVS_SendEvent(RF_TLM_SUBSCRIBE_ERR_EID, CFE_EVS_EventType_ERROR,
-         "RF Telemetry Output App: Error Subscribing to Altitude App, RC = 0x%08lX\n",
+         "RF Telemetry Output App: Error Subscribing to IMU App, RC = 0x%08lX\n",
          (unsigned long)status);
        return status;
     }
@@ -591,9 +591,9 @@ void RF_TLM_forward_telemetry(void){
                 RF_TLM_Data.byte_group_4[i] = dataPtr->byte_group_4[i];
                 RF_TLM_Data.byte_group_5[i] = dataPtr->byte_group_5[i];
                 RF_TLM_Data.byte_group_6[i] = dataPtr->byte_group_6[i];
-                RF_TLM_Data.byte_group_4[i] = dataPtr->byte_group_7[i];
-                RF_TLM_Data.byte_group_5[i] = dataPtr->byte_group_8[i];
-                RF_TLM_Data.byte_group_6[i] = dataPtr->byte_group_9[i];
+                RF_TLM_Data.byte_group_7[i] = dataPtr->byte_group_7[i];
+                RF_TLM_Data.byte_group_8[i] = dataPtr->byte_group_8[i];
+                RF_TLM_Data.byte_group_9[i] = dataPtr->byte_group_9[i];
               }
 
               CFE_ES_PerfLogEntry(RF_TLM_I2C_SEND_PERF_ID);
@@ -605,7 +605,7 @@ void RF_TLM_forward_telemetry(void){
               if(RF_TLM_Data.tlm_debug){
                 switch (CFE_SB_MsgIdToValue(TlmMsgId)){
 
-                  case ALTITUDE_APP_RF_DATA_MID:
+                  case IMU_APP_RF_DATA_MID:
                     CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_INFORMATION,
                                       "RF TLM - Enviando Altitud app con status %d",status);
                     break;

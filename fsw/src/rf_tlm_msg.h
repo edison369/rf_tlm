@@ -74,6 +74,9 @@ typedef struct
     uint8 byte_group_4[4];
     uint8 byte_group_5[4];
     uint8 byte_group_6[4];
+    uint8 byte_group_7[4];
+    uint8 byte_group_8[4];
+    uint8 byte_group_9[4];
 } SUBS_APP_OutData_t;
 
 typedef struct
