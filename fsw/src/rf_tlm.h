@@ -72,8 +72,6 @@ static const char genuC_path[] = "/dev/i2c-2.genuC-0";
  * Depth of pipe for telemetry forwarded through the RF_TLM application
  */
 #define RF_TLM_TO_PIPE_DEPTH OS_QUEUE_MAX_DEPTH
-
-#define RF_TLM_TBL_ELEMENT_1_MAX 10
 /************************************************************************
 ** Type Definitions
 *************************************************************************/

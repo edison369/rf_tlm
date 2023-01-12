@@ -668,7 +668,7 @@ void RF_TLM_forward_telemetry(void){
           // The pipe is empty
           break;
         }else if(CFE_SB_status == CFE_SB_TIME_OUT){
-          CFE_EVS_SendEvent(RF_TLM_COMMANDNOP_INF_EID, CFE_EVS_EventType_INFORMATION,
+          CFE_EVS_SendEvent(RF_TLM_PIPE_ERR_EID, CFE_EVS_EventType_INFORMATION,
                             "RF TLM: Message fails to arrive within the specified timeout period\n");
           break;
         }
