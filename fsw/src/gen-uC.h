@@ -46,13 +46,6 @@ int uC_send_test(int fd);
 
 
 // I2C functions
-
-#ifdef uC_reading
-
-int uC_get_bytes(uint16_t chip_address, uint8_t register_add, uint8_t **buff);
-
-#endif
-
 int uC_set_bytes(uint16_t chip_address, uint8_t **val, int numBytes);
 
 

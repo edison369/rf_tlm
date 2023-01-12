@@ -44,6 +44,9 @@
 #include "imu_app_msgids.h"
 #include "imu_app_msg.h"
 
+#include "altitude_app_msgids.h"
+#include "altitude_app_msg.h"
+
 #include "blinky_msgids.h"
 #include "blinky_msg.h"
 /***********************************************************************/
