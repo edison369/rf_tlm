@@ -264,6 +264,21 @@ int32 RF_TLM_Init(void)
        return status;
     }
 
+    /*
+    ** Subscribe to Temperature App RF packets
+    */
+    // status = CFE_SB_Subscribe(CFE_SB_ValueToMsgId(TEMP_APP_RF_DATA_MID), RF_TLM_Data.TlmPipe);
+    status = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(TEMP_APP_RF_DATA_MID),  /* Msg Id to Receive */
+                                RF_TLM_Data.TlmPipe,                            /* Pipe Msg is to be Rcvd on */
+                                CFE_SB_DEFAULT_QOS,                             /* Quality of Service */
+                                10);                                            /* Max Number to Queue */
+    if (status != CFE_SUCCESS){
+       CFE_EVS_SendEvent(RF_TLM_SUBSCRIBE_ERR_EID, CFE_EVS_EventType_ERROR,
+         "RF Telemetry Output App: Error Subscribing to Temp App, RC = 0x%08lX\n",
+         (unsigned long)status);
+       return status;
+    }
+
     CFE_EVS_SendEvent(RF_TLM_STARTUP_INF_EID, CFE_EVS_EventType_INFORMATION, "RF Tlm App Initialized.%s",
                      RF_TLM_VERSION_STRING);
 
@@ -441,8 +456,8 @@ int32 RF_TLM_ReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg)
     }
 
     if(RF_TLM_Data.AppReporting4){
-      RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x00;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0x00;
+      RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x08;
+      RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0xE1;
     }else{
       RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x00;
       RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0x00;
@@ -627,6 +642,11 @@ void RF_TLM_forward_telemetry(void){
                   case ALTITUDE_APP_RF_DATA_MID:
                     CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_INFORMATION,
                                       "RF TLM - Enviando Altitud app con status %d",status);
+                    break;
+
+                  case TEMP_APP_RF_DATA_MID:
+                    CFE_EVS_SendEvent(RF_TLM_INVALID_MSGID_ERR_EID, CFE_EVS_EventType_INFORMATION,
+                                      "RF TLM - Enviando Temp app con status %d",status);
                     break;
 
                   default:
