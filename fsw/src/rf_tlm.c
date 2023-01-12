@@ -271,9 +271,6 @@ void RF_TLM_Data_Init(void){
     RF_TLM_Data.byte_group_4[i] = 0;
     RF_TLM_Data.byte_group_5[i] = 0;
     RF_TLM_Data.byte_group_6[i] = 0;
-    RF_TLM_Data.byte_group_7[i] = 0;
-    RF_TLM_Data.byte_group_8[i] = 0;
-    RF_TLM_Data.byte_group_9[i] = 0;
   }
 }
 
@@ -591,9 +588,6 @@ void RF_TLM_forward_telemetry(void){
                 RF_TLM_Data.byte_group_4[i] = dataPtr->byte_group_4[i];
                 RF_TLM_Data.byte_group_5[i] = dataPtr->byte_group_5[i];
                 RF_TLM_Data.byte_group_6[i] = dataPtr->byte_group_6[i];
-                RF_TLM_Data.byte_group_7[i] = dataPtr->byte_group_7[i];
-                RF_TLM_Data.byte_group_8[i] = dataPtr->byte_group_8[i];
-                RF_TLM_Data.byte_group_9[i] = dataPtr->byte_group_9[i];
               }
 
               CFE_ES_PerfLogEntry(RF_TLM_I2C_SEND_PERF_ID);
@@ -671,9 +665,6 @@ int32 send_tlm_data(){
     val[i+18] = RF_TLM_Data.byte_group_4[i];
     val[i+22] = RF_TLM_Data.byte_group_5[i];
     val[i+26] = RF_TLM_Data.byte_group_6[i];
-    val[i+30] = RF_TLM_Data.byte_group_7[i];
-    val[i+34] = RF_TLM_Data.byte_group_8[i];
-    val[i+38] = RF_TLM_Data.byte_group_9[i];
   }
 
 
