@@ -46,7 +46,7 @@ int uC_set_bytes(uint16_t chip_address, uint8_t **val, int numBytes){
 
   rv = ioctl(fd, I2C_RDWR, &payload);
   if (rv < 0) {
-    perror("ioctl failed");
+    // perror("ioctl failed");
   }
   close(fd);
 
