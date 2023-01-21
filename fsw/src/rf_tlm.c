@@ -61,6 +61,7 @@ void RF_TLM_Main(void)
         RF_TLM_Data.RunStatus = CFE_ES_RunStatus_APP_ERROR;
     }else{
       RF_TLM_openTLM();
+      RF_TLM_Data.downlink_on = true;
     }
 
     /*
@@ -120,10 +121,8 @@ int32 RF_TLM_Init(void)
     RF_TLM_Data.CmdCounter = 0;
     RF_TLM_Data.ErrCounter = 0;
 
-    RF_TLM_Data.AppReporting1 = false;
-    RF_TLM_Data.AppReporting2 = false;
-    RF_TLM_Data.AppReporting3 = false;
-    RF_TLM_Data.AppReporting4 = false;
+    RF_TLM_Data.PcktCounter = 0;
+    RF_TLM_Data.PcktErrCounter = 0;
 
     /*
     ** Initialize app configuration data
@@ -321,6 +320,20 @@ int32 RF_TLM_EnableOutput(const RF_TLM_EnableOutputCmd_t *data){
     return CFE_SUCCESS;
 }
 
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/*                                                                 */
+/* RF_TLM_DisableOutput() -- TLM output disabled                     */
+/*                                                                 */
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+int32 RF_TLM_DisableOutput(const RF_TLM_DisableOutputCmd_t *data){
+    RF_TLM_Data.suppress_sendto = false;
+    RF_TLM_Data.downlink_on = false;
+    CFE_EVS_SendEvent(RF_TLM_TLMOUTENA_INF_EID, CFE_EVS_EventType_INFORMATION, "RF telemetry output suppressed\n");
+
+    ++RF_TLM_Data.HkTlm.Payload.CommandCounter;
+    return CFE_SUCCESS;
+}
+
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
 /*                                                                            */
 /*  Purpose:                                                                  */
@@ -390,6 +403,12 @@ void RF_TLM_ProcessGroundCommand(CFE_SB_Buffer_t *SBBufPtr){
 
             break;
 
+        case RF_TLM_OUTPUT_DISABLE_CC:
+            if (RF_TLM_VerifyCmdLength(&SBBufPtr->Msg, sizeof(RF_TLM_DisableOutputCmd_t))){
+                RF_TLM_DisableOutput((const RF_TLM_DisableOutputCmd_t *)SBBufPtr);
+            }
+            break;
+
         case RF_TLM_DEBUG_ENABLE_CC:
             if (RF_TLM_VerifyCmdLength(&SBBufPtr->Msg, sizeof(RF_TLM_EnableDebugCmd_t)))
             {
@@ -431,37 +450,8 @@ int32 RF_TLM_ReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg)
     RF_TLM_Data.HkTlm.Payload.CommandErrorCounter = RF_TLM_Data.ErrCounter;
     RF_TLM_Data.HkTlm.Payload.CommandCounter      = RF_TLM_Data.CmdCounter;
 
-    if(RF_TLM_Data.AppReporting1){
-      RF_TLM_Data.HkTlm.Payload.AppReportingID1[1] = 0x08;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID1[0] = 0xE0;
-    }else{
-      RF_TLM_Data.HkTlm.Payload.AppReportingID1[1] = 0x00;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID1[0] = 0x00;
-    }
-
-    if(RF_TLM_Data.AppReporting2){
-      RF_TLM_Data.HkTlm.Payload.AppReportingID2[1] = 0x08;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID2[0] = 0xB3;
-    }else{
-      RF_TLM_Data.HkTlm.Payload.AppReportingID2[1] = 0x00;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID2[0] = 0x00;
-    }
-
-    if(RF_TLM_Data.AppReporting3){
-      RF_TLM_Data.HkTlm.Payload.AppReportingID3[1] = 0x08;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID3[0] = 0xE2;
-    }else{
-      RF_TLM_Data.HkTlm.Payload.AppReportingID3[1] = 0x00;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID3[0] = 0x00;
-    }
-
-    if(RF_TLM_Data.AppReporting4){
-      RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x08;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0xE1;
-    }else{
-      RF_TLM_Data.HkTlm.Payload.AppReportingID4[1] = 0x00;
-      RF_TLM_Data.HkTlm.Payload.AppReportingID4[0] = 0x00;
-    }
+    RF_TLM_Data.HkTlm.Payload.PcktCounter = RF_TLM_Data.PcktCounter;
+    RF_TLM_Data.HkTlm.Payload.PcktErrCounter = RF_TLM_Data.PcktErrCounter;
 
     /*
     ** Send housekeeping telemetry packet...
@@ -709,8 +699,10 @@ int32 send_tlm_data(){
   // Send the telemetry payload
   rv = uC_set_bytes(UC_ADDRESS, &val, RF_PAYLOAD_BYTES);
   if(rv == 1 || rv < 0){
+    ++RF_TLM_Data.PcktErrCounter;
     return -1;    // Couldn't open bus or ioctl failed
   }else{
+    ++RF_TLM_Data.PcktCounter;
     return 0;     // Succeded
   }
 }

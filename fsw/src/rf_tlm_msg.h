@@ -31,8 +31,9 @@
 #define RF_TLM_NOOP_CC           0
 #define RF_TLM_RESET_COUNTERS_CC 1
 #define RF_TLM_OUTPUT_ENABLE_CC  2
-#define RF_TLM_DEBUG_ENABLE_CC   3
-#define RF_TLM_DEBUG_DISABLE_CC  4
+#define RF_TLM_OUTPUT_DISABLE_CC 3
+#define RF_TLM_DEBUG_ENABLE_CC   4
+#define RF_TLM_DEBUG_DISABLE_CC  5
 
 /*************************************************************************/
 /*
@@ -53,6 +54,7 @@ typedef struct
 typedef RF_TLM_NoArgsCmd_t RF_TLM_NoopCmd_t;
 typedef RF_TLM_NoArgsCmd_t RF_TLM_ResetCountersCmd_t;
 typedef RF_TLM_NoArgsCmd_t RF_TLM_EnableOutputCmd_t;
+typedef RF_TLM_NoArgsCmd_t RF_TLM_DisableOutputCmd_t;
 typedef RF_TLM_NoArgsCmd_t RF_TLM_EnableDebugCmd_t;
 typedef RF_TLM_NoArgsCmd_t RF_TLM_DisableDebugCmd_t;
 
@@ -81,10 +83,8 @@ typedef struct
     uint8 CommandCounter;
     uint8 CommandErrorCounter;
     uint8 spare[2];
-    uint8 AppReportingID1[2];   /**< \brief App ID that reports with this app */
-    uint8 AppReportingID2[2];   /**< \brief App ID that reports with this app */
-    uint8 AppReportingID3[2];   /**< \brief App ID that reports with this app */
-    uint8 AppReportingID4[2];   /**< \brief App ID that reports with this app */
+    int PcktCounter;
+    int PcktErrCounter;
 } RF_TLM_UDP_HkTlm_Payload_t;   // Telemetry sent over UDP (to_lab)
 
 typedef struct

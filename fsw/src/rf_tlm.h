@@ -111,10 +111,8 @@ typedef struct
     uint8 byte_group_5[4];
     uint8 byte_group_6[4];
 
-    bool AppReporting1;
-    bool AppReporting2;
-    bool AppReporting3;
-    bool AppReporting4;
+    int PcktCounter;
+    int PcktErrCounter;
 
     /*
     ** Run Status variable used in the main processing loop
@@ -153,6 +151,7 @@ int32 RF_TLM_ReportHousekeeping(const CFE_MSG_CommandHeader_t *Msg);
 int32 RF_TLM_ResetCounters(const RF_TLM_ResetCountersCmd_t *Msg);
 int32 RF_TLM_Noop(const RF_TLM_NoopCmd_t *Msg);
 int32 RF_TLM_EnableOutput(const RF_TLM_EnableOutputCmd_t *data);
+int32 RF_TLM_DisableOutput(const RF_TLM_DisableOutputCmd_t *data);
 int32 RF_TLM_Enable_Debug(const RF_TLM_EnableDebugCmd_t *Msg);
 int32 RF_TLM_Disable_Debug(const RF_TLM_DisableDebugCmd_t *Msg);
 
