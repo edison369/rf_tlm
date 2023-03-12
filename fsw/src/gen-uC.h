@@ -46,7 +46,9 @@ int uC_send_test(int fd);
 
 
 // I2C functions
+
 int uC_set_bytes(uint16_t chip_address, uint8_t **val, int numBytes);
+int uC_read_bytes(uint16_t nr_bytes, uint8_t **buff);
 
 
 /** @} */

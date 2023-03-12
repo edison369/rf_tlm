@@ -46,9 +46,55 @@ int uC_set_bytes(uint16_t chip_address, uint8_t **val, int numBytes){
 
   rv = ioctl(fd, I2C_RDWR, &payload);
   if (rv < 0) {
-    // perror("ioctl failed");
+    perror("ioctl failed");
   }
   close(fd);
+
+  return rv;
+}
+
+int uC_read_bytes(uint16_t nr_bytes, uint8_t **buff){
+  int fd;
+  uint16_t i2c_address = (uint16_t) UC_ADDRESS;
+  uint8_t data_address = (uint8_t) 0;
+
+  fd = open(&bus_path[0], O_RDWR);
+  if (fd < 0) {
+    printf("Couldn't open bus...\n");
+    return 1;
+  }
+
+  int rv;
+  uint8_t value[nr_bytes];
+  i2c_msg msgs[] = {{
+    .addr = i2c_address,
+    .flags = 0,
+    .buf = &data_address,
+    .len = 1,
+  }, {
+    .addr = i2c_address,
+    .flags = I2C_M_RD,
+    .buf = value,
+    .len = nr_bytes,
+  }};
+  struct i2c_rdwr_ioctl_data payload = {
+    .msgs = msgs,
+    .nmsgs = sizeof(msgs)/sizeof(msgs[0]),
+  };
+  uint16_t i;
+
+  rv = ioctl(fd, I2C_RDWR, &payload);
+  if (rv < 0) {
+    printf("ioctl failed...\n");
+  } else {
+
+    free(*buff);
+    *buff = malloc(nr_bytes * sizeof(uint8_t));
+
+    for (i = 0; i < nr_bytes; ++i) {
+      (*buff)[i] = value[i];
+    }
+  }
 
   return rv;
 }
